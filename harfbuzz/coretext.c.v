@@ -10,7 +10,7 @@ $if macos || ios {
 	}
 	#flag -framework CoreText
 
-	#include <hb-coretext.h>
+	#include "@VMODROOT/harfbuzz/coretext_native.h"
 
 	fn C.hb_coretext_font_create(ct_font voidptr) &C.hb_font_t
 

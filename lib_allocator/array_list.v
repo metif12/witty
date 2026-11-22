@@ -1,8 +1,5 @@
 module lib_allocator
 
-fn C.GC_add_roots(voidptr, voidptr)
-fn C.GC_remove_roots(voidptr, voidptr)
-
 // Source values are inline. V sum types contain GC pointers, so allocator-
 // owned containers must register their backing ranges with V's collector.
 pub fn register_value_storage(ptr voidptr, bytes uint) {

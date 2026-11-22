@@ -3,7 +3,7 @@ module macos
 
 import input
 
-#include <Carbon/Carbon.h>
+#insert "@VMODROOT/macos/input_source_abi.h"
 
 pub struct C.witty_macos_range {
 pub:
@@ -76,7 +76,7 @@ fn C.witty_macos_key_event(event voidptr, flags u64, chars voidptr, ignoring voi
 fn C.witty_macos_monitor_key_releases(callback voidptr) voidptr
 fn C.witty_macos_msg_super_from_void0(obj voidptr, defining_class voidptr, selector voidptr)
 fn C.TISCopyCurrentKeyboardInputSource() voidptr
-fn C.TISGetInputSourceProperty(source voidptr, property voidptr) voidptr
+fn C.witty_macos_input_source_id(source voidptr) voidptr
 fn C.sel_getName(selector voidptr) &char
 
 pub fn set_input_client_callbacks(callbacks InputClientCallbacks) {
@@ -115,7 +115,7 @@ fn keyboard_layout_id() ?string {
 	source := C.TISCopyCurrentKeyboardInputSource()
 	if source == unsafe { nil } { return none }
 	defer { cf_release(source) }
-	id := C.TISGetInputSourceProperty(source, C.kTISPropertyInputSourceID)
+	id := C.witty_macos_input_source_id(source)
 	if id == unsafe { nil } { return none }
 	return objc_utf8_string(ObjId(id))
 }

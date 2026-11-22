@@ -64,31 +64,8 @@ $if macos || ios {
 		#flag -framework Carbon
 	}
 
-	#include <TargetConditionals.h>
-
-	#include <CoreFoundation/CoreFoundation.h>
-
-	#include <CoreText/CoreText.h>
-
-	#include <CoreGraphics/CoreGraphics.h>
-
-	#include <CoreVideo/CoreVideo.h>
-
-	#include <CoreVideo/CVPixelBuffer.h>
-
-	#include <QuartzCore/CALayer.h>
-
-	#include <IOSurface/IOSurfaceRef.h>
-
-	#include <dispatch/dispatch.h>
-
-	#include <os/log.h>
-
-	#include <os/signpost.h>
-
-	$if macos {
-		#include <Carbon/Carbon.h>
-	}
+	// The framework headers are only for native code: FastC's TinyCC units cannot parse them.
+	#include "@VMODROOT/macos/core_frameworks.h"
 
 	fn C.CFRelease(obj voidptr)
 
@@ -2012,90 +1989,92 @@ $if macos || ios {
 	// iosurface
 	// ============================================================
 
+	// CoreVideo's kCVPixelFormatType_* FourCC codes, written out so that V code does not need
+	// CoreVideo's headers (FastC's TinyCC units cannot parse CoreGraphics).
 	pub enum PixelFormat as int {
-		p1_monochrome                                = C.kCVPixelFormatType_1Monochrome
-		p2_indexed                                   = C.kCVPixelFormatType_2Indexed
-		p4_indexed                                   = C.kCVPixelFormatType_4Indexed
-		p8_indexed                                   = C.kCVPixelFormatType_8Indexed
-		p1_indexed_gray_white_is_zero                = C.kCVPixelFormatType_1IndexedGray_WhiteIsZero
-		p2_indexed_gray_white_is_zero                = C.kCVPixelFormatType_2IndexedGray_WhiteIsZero
-		p4_indexed_gray_white_is_zero                = C.kCVPixelFormatType_4IndexedGray_WhiteIsZero
-		p8_indexed_gray_white_is_zero                = C.kCVPixelFormatType_8IndexedGray_WhiteIsZero
-		p16_be_555                                   = C.kCVPixelFormatType_16BE555
-		p16_le_555                                   = C.kCVPixelFormatType_16LE555
-		p16_le_5551                                  = C.kCVPixelFormatType_16LE5551
-		p16_be_565                                   = C.kCVPixelFormatType_16BE565
-		p16_le_565                                   = C.kCVPixelFormatType_16LE565
-		p24_rgb                                      = C.kCVPixelFormatType_24RGB
-		p24_bgr                                      = C.kCVPixelFormatType_24BGR
-		p32_argb                                     = C.kCVPixelFormatType_32ARGB
-		p32_bgra                                     = C.kCVPixelFormatType_32BGRA
-		p32_abgr                                     = C.kCVPixelFormatType_32ABGR
-		p32_rgba                                     = C.kCVPixelFormatType_32RGBA
-		p64_argb                                     = C.kCVPixelFormatType_64ARGB
-		p64_rgbale                                   = C.kCVPixelFormatType_64RGBALE
-		p48_rgb                                      = C.kCVPixelFormatType_48RGB
-		p32_alpha_gray                               = C.kCVPixelFormatType_32AlphaGray
-		p16_gray                                     = C.kCVPixelFormatType_16Gray
-		p30_rgb                                      = C.kCVPixelFormatType_30RGB
-		p30_rgb_r_210                                = C.kCVPixelFormatType_30RGB_r210
-		p422_yp_cb_cr_8                              = C.kCVPixelFormatType_422YpCbCr8
-		p4444_yp_cb_cr_a_8                           = C.kCVPixelFormatType_4444YpCbCrA8
-		p4444_yp_cb_cr_a_8_r                         = C.kCVPixelFormatType_4444YpCbCrA8R
-		p4444_ayp_cb_cr_8                            = C.kCVPixelFormatType_4444AYpCbCr8
-		p4444_ayp_cb_cr_16                           = C.kCVPixelFormatType_4444AYpCbCr16
-		p4444_ayp_cb_cr_float                        = C.kCVPixelFormatType_4444AYpCbCrFloat
-		p444_yp_cb_cr_8                              = C.kCVPixelFormatType_444YpCbCr8
-		p422_yp_cb_cr_16                             = C.kCVPixelFormatType_422YpCbCr16
-		p422_yp_cb_cr_10                             = C.kCVPixelFormatType_422YpCbCr10
-		p444_yp_cb_cr_10                             = C.kCVPixelFormatType_444YpCbCr10
-		p420_yp_cb_cr_8_planar                       = C.kCVPixelFormatType_420YpCbCr8Planar
-		p420_yp_cb_cr_8_planar_full_range            = C.kCVPixelFormatType_420YpCbCr8PlanarFullRange
-		p422_yp_cb_cr_4_a_8_bi_planar                = C.kCVPixelFormatType_422YpCbCr_4A_8BiPlanar
-		p420_yp_cb_cr_8_bi_planar_video_range        = C.kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
-		p420_yp_cb_cr_8_bi_planar_full_range         = C.kCVPixelFormatType_420YpCbCr8BiPlanarFullRange
-		p422_yp_cb_cr_8_bi_planar_video_range        = C.kCVPixelFormatType_422YpCbCr8BiPlanarVideoRange
-		p422_yp_cb_cr_8_bi_planar_full_range         = C.kCVPixelFormatType_422YpCbCr8BiPlanarFullRange
-		p444_yp_cb_cr_8_bi_planar_video_range        = C.kCVPixelFormatType_444YpCbCr8BiPlanarVideoRange
-		p444_yp_cb_cr_8_bi_planar_full_range         = C.kCVPixelFormatType_444YpCbCr8BiPlanarFullRange
-		p422_yp_cb_cr_8_yuvs                         = C.kCVPixelFormatType_422YpCbCr8_yuvs
-		p422_yp_cb_cr_8_full_range                   = C.kCVPixelFormatType_422YpCbCr8FullRange
-		one_component_8                              = C.kCVPixelFormatType_OneComponent8
-		two_component_8                              = C.kCVPixelFormatType_TwoComponent8
-		p30_rgblepacked_wide_gamut                   = C.kCVPixelFormatType_30RGBLEPackedWideGamut
-		argb_2101010_lepacked                        = C.kCVPixelFormatType_ARGB2101010LEPacked
-		p40_argblewide_gamut                         = C.kCVPixelFormatType_40ARGBLEWideGamut
-		p40_argblewide_gamut_premultiplied           = C.kCVPixelFormatType_40ARGBLEWideGamutPremultiplied
-		one_component_10                             = C.kCVPixelFormatType_OneComponent10
-		one_component_12                             = C.kCVPixelFormatType_OneComponent12
-		one_component_16                             = C.kCVPixelFormatType_OneComponent16
-		two_component_16                             = C.kCVPixelFormatType_TwoComponent16
-		one_component_16_half                        = C.kCVPixelFormatType_OneComponent16Half
-		one_component_32_float                       = C.kCVPixelFormatType_OneComponent32Float
-		two_component_16_half                        = C.kCVPixelFormatType_TwoComponent16Half
-		two_component_32_float                       = C.kCVPixelFormatType_TwoComponent32Float
-		p64_rgbahalf                                 = C.kCVPixelFormatType_64RGBAHalf
-		p128_rgbafloat                               = C.kCVPixelFormatType_128RGBAFloat
-		p14_bayer_grbg                               = C.kCVPixelFormatType_14Bayer_GRBG
-		p14_bayer_rggb                               = C.kCVPixelFormatType_14Bayer_RGGB
-		p14_bayer_bggr                               = C.kCVPixelFormatType_14Bayer_BGGR
-		p14_bayer_gbrg                               = C.kCVPixelFormatType_14Bayer_GBRG
-		disparity_float_16                           = C.kCVPixelFormatType_DisparityFloat16
-		disparity_float_32                           = C.kCVPixelFormatType_DisparityFloat32
-		depth_float_16                               = C.kCVPixelFormatType_DepthFloat16
-		depth_float_32                               = C.kCVPixelFormatType_DepthFloat32
-		p420_yp_cb_cr_10_bi_planar_video_range       = C.kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange
-		p422_yp_cb_cr_10_bi_planar_video_range       = C.kCVPixelFormatType_422YpCbCr10BiPlanarVideoRange
-		p444_yp_cb_cr_10_bi_planar_video_range       = C.kCVPixelFormatType_444YpCbCr10BiPlanarVideoRange
-		p420_yp_cb_cr_10_bi_planar_full_range        = C.kCVPixelFormatType_420YpCbCr10BiPlanarFullRange
-		p422_yp_cb_cr_10_bi_planar_full_range        = C.kCVPixelFormatType_422YpCbCr10BiPlanarFullRange
-		p444_yp_cb_cr_10_bi_planar_full_range        = C.kCVPixelFormatType_444YpCbCr10BiPlanarFullRange
-		p420_yp_cb_cr_8_video_range_8_a_tri_planar   = C.kCVPixelFormatType_420YpCbCr8VideoRange_8A_TriPlanar
-		p16_versatile_bayer                          = C.kCVPixelFormatType_16VersatileBayer
-		p64_rgba_downscaled_pro_res_raw              = C.kCVPixelFormatType_64RGBA_DownscaledProResRAW
-		p422_yp_cb_cr_16_bi_planar_video_range       = C.kCVPixelFormatType_422YpCbCr16BiPlanarVideoRange
-		p444_yp_cb_cr_16_bi_planar_video_range       = C.kCVPixelFormatType_444YpCbCr16BiPlanarVideoRange
-		p444_yp_cb_cr_16_video_range_16_a_tri_planar = C.kCVPixelFormatType_444YpCbCr16VideoRange_16A_TriPlanar
+		p1_monochrome                                = 0x00000001 // kCVPixelFormatType_1Monochrome
+		p2_indexed                                   = 0x00000002 // kCVPixelFormatType_2Indexed
+		p4_indexed                                   = 0x00000004 // kCVPixelFormatType_4Indexed
+		p8_indexed                                   = 0x00000008 // kCVPixelFormatType_8Indexed
+		p1_indexed_gray_white_is_zero                = 0x00000021 // kCVPixelFormatType_1IndexedGray_WhiteIsZero
+		p2_indexed_gray_white_is_zero                = 0x00000022 // kCVPixelFormatType_2IndexedGray_WhiteIsZero
+		p4_indexed_gray_white_is_zero                = 0x00000024 // kCVPixelFormatType_4IndexedGray_WhiteIsZero
+		p8_indexed_gray_white_is_zero                = 0x00000028 // kCVPixelFormatType_8IndexedGray_WhiteIsZero
+		p16_be_555                                   = 0x00000010 // kCVPixelFormatType_16BE555
+		p16_le_555                                   = 0x4c353535 // kCVPixelFormatType_16LE555
+		p16_le_5551                                  = 0x35353531 // kCVPixelFormatType_16LE5551
+		p16_be_565                                   = 0x42353635 // kCVPixelFormatType_16BE565
+		p16_le_565                                   = 0x4c353635 // kCVPixelFormatType_16LE565
+		p24_rgb                                      = 0x00000018 // kCVPixelFormatType_24RGB
+		p24_bgr                                      = 0x32344247 // kCVPixelFormatType_24BGR
+		p32_argb                                     = 0x00000020 // kCVPixelFormatType_32ARGB
+		p32_bgra                                     = 0x42475241 // kCVPixelFormatType_32BGRA
+		p32_abgr                                     = 0x41424752 // kCVPixelFormatType_32ABGR
+		p32_rgba                                     = 0x52474241 // kCVPixelFormatType_32RGBA
+		p64_argb                                     = 0x62363461 // kCVPixelFormatType_64ARGB
+		p64_rgbale                                   = 0x6c363472 // kCVPixelFormatType_64RGBALE
+		p48_rgb                                      = 0x62343872 // kCVPixelFormatType_48RGB
+		p32_alpha_gray                               = 0x62333261 // kCVPixelFormatType_32AlphaGray
+		p16_gray                                     = 0x62313667 // kCVPixelFormatType_16Gray
+		p30_rgb                                      = 0x5231306b // kCVPixelFormatType_30RGB
+		p30_rgb_r_210                                = 0x72323130 // kCVPixelFormatType_30RGB_r210
+		p422_yp_cb_cr_8                              = 0x32767579 // kCVPixelFormatType_422YpCbCr8
+		p4444_yp_cb_cr_a_8                           = 0x76343038 // kCVPixelFormatType_4444YpCbCrA8
+		p4444_yp_cb_cr_a_8_r                         = 0x72343038 // kCVPixelFormatType_4444YpCbCrA8R
+		p4444_ayp_cb_cr_8                            = 0x79343038 // kCVPixelFormatType_4444AYpCbCr8
+		p4444_ayp_cb_cr_16                           = 0x79343136 // kCVPixelFormatType_4444AYpCbCr16
+		p4444_ayp_cb_cr_float                        = 0x7234666c // kCVPixelFormatType_4444AYpCbCrFloat
+		p444_yp_cb_cr_8                              = 0x76333038 // kCVPixelFormatType_444YpCbCr8
+		p422_yp_cb_cr_16                             = 0x76323136 // kCVPixelFormatType_422YpCbCr16
+		p422_yp_cb_cr_10                             = 0x76323130 // kCVPixelFormatType_422YpCbCr10
+		p444_yp_cb_cr_10                             = 0x76343130 // kCVPixelFormatType_444YpCbCr10
+		p420_yp_cb_cr_8_planar                       = 0x79343230 // kCVPixelFormatType_420YpCbCr8Planar
+		p420_yp_cb_cr_8_planar_full_range            = 0x66343230 // kCVPixelFormatType_420YpCbCr8PlanarFullRange
+		p422_yp_cb_cr_4_a_8_bi_planar                = 0x61327679 // kCVPixelFormatType_422YpCbCr_4A_8BiPlanar
+		p420_yp_cb_cr_8_bi_planar_video_range        = 0x34323076 // kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
+		p420_yp_cb_cr_8_bi_planar_full_range         = 0x34323066 // kCVPixelFormatType_420YpCbCr8BiPlanarFullRange
+		p422_yp_cb_cr_8_bi_planar_video_range        = 0x34323276 // kCVPixelFormatType_422YpCbCr8BiPlanarVideoRange
+		p422_yp_cb_cr_8_bi_planar_full_range         = 0x34323266 // kCVPixelFormatType_422YpCbCr8BiPlanarFullRange
+		p444_yp_cb_cr_8_bi_planar_video_range        = 0x34343476 // kCVPixelFormatType_444YpCbCr8BiPlanarVideoRange
+		p444_yp_cb_cr_8_bi_planar_full_range         = 0x34343466 // kCVPixelFormatType_444YpCbCr8BiPlanarFullRange
+		p422_yp_cb_cr_8_yuvs                         = 0x79757673 // kCVPixelFormatType_422YpCbCr8_yuvs
+		p422_yp_cb_cr_8_full_range                   = 0x79757666 // kCVPixelFormatType_422YpCbCr8FullRange
+		one_component_8                              = 0x4c303038 // kCVPixelFormatType_OneComponent8
+		two_component_8                              = 0x32433038 // kCVPixelFormatType_TwoComponent8
+		p30_rgblepacked_wide_gamut                   = 0x77333072 // kCVPixelFormatType_30RGBLEPackedWideGamut
+		argb_2101010_lepacked                        = 0x6c313072 // kCVPixelFormatType_ARGB2101010LEPacked
+		p40_argblewide_gamut                         = 0x77343061 // kCVPixelFormatType_40ARGBLEWideGamut
+		p40_argblewide_gamut_premultiplied           = 0x7734306d // kCVPixelFormatType_40ARGBLEWideGamutPremultiplied
+		one_component_10                             = 0x4c303130 // kCVPixelFormatType_OneComponent10
+		one_component_12                             = 0x4c303132 // kCVPixelFormatType_OneComponent12
+		one_component_16                             = 0x4c303136 // kCVPixelFormatType_OneComponent16
+		two_component_16                             = 0x32433136 // kCVPixelFormatType_TwoComponent16
+		one_component_16_half                        = 0x4c303068 // kCVPixelFormatType_OneComponent16Half
+		one_component_32_float                       = 0x4c303066 // kCVPixelFormatType_OneComponent32Float
+		two_component_16_half                        = 0x32433068 // kCVPixelFormatType_TwoComponent16Half
+		two_component_32_float                       = 0x32433066 // kCVPixelFormatType_TwoComponent32Float
+		p64_rgbahalf                                 = 0x52476841 // kCVPixelFormatType_64RGBAHalf
+		p128_rgbafloat                               = 0x52476641 // kCVPixelFormatType_128RGBAFloat
+		p14_bayer_grbg                               = 0x67726234 // kCVPixelFormatType_14Bayer_GRBG
+		p14_bayer_rggb                               = 0x72676734 // kCVPixelFormatType_14Bayer_RGGB
+		p14_bayer_bggr                               = 0x62676734 // kCVPixelFormatType_14Bayer_BGGR
+		p14_bayer_gbrg                               = 0x67627234 // kCVPixelFormatType_14Bayer_GBRG
+		disparity_float_16                           = 0x68646973 // kCVPixelFormatType_DisparityFloat16
+		disparity_float_32                           = 0x66646973 // kCVPixelFormatType_DisparityFloat32
+		depth_float_16                               = 0x68646570 // kCVPixelFormatType_DepthFloat16
+		depth_float_32                               = 0x66646570 // kCVPixelFormatType_DepthFloat32
+		p420_yp_cb_cr_10_bi_planar_video_range       = 0x78343230 // kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange
+		p422_yp_cb_cr_10_bi_planar_video_range       = 0x78343232 // kCVPixelFormatType_422YpCbCr10BiPlanarVideoRange
+		p444_yp_cb_cr_10_bi_planar_video_range       = 0x78343434 // kCVPixelFormatType_444YpCbCr10BiPlanarVideoRange
+		p420_yp_cb_cr_10_bi_planar_full_range        = 0x78663230 // kCVPixelFormatType_420YpCbCr10BiPlanarFullRange
+		p422_yp_cb_cr_10_bi_planar_full_range        = 0x78663232 // kCVPixelFormatType_422YpCbCr10BiPlanarFullRange
+		p444_yp_cb_cr_10_bi_planar_full_range        = 0x78663434 // kCVPixelFormatType_444YpCbCr10BiPlanarFullRange
+		p420_yp_cb_cr_8_video_range_8_a_tri_planar   = 0x76306138 // kCVPixelFormatType_420YpCbCr8VideoRange_8A_TriPlanar
+		p16_versatile_bayer                          = 0x62703136 // kCVPixelFormatType_16VersatileBayer
+		p64_rgba_downscaled_pro_res_raw              = 0x62703634 // kCVPixelFormatType_64RGBA_DownscaledProResRAW
+		p422_yp_cb_cr_16_bi_planar_video_range       = 0x73763232 // kCVPixelFormatType_422YpCbCr16BiPlanarVideoRange
+		p444_yp_cb_cr_16_bi_planar_video_range       = 0x73763434 // kCVPixelFormatType_444YpCbCr16BiPlanarVideoRange
+		p444_yp_cb_cr_16_video_range_16_a_tri_planar = 0x73346173 // kCVPixelFormatType_444YpCbCr16VideoRange_16A_TriPlanar
 		_
 	}
 
