@@ -32,6 +32,9 @@ jobs:
       - name: Build
         # Universal (arm64 + x86_64) app, as released. The standalone XCFramework
         # is skipped: its iOS slices need a V whose iOS C output compiles.
+        # A cached build can omit declarations for specialized destructors.
+        env:
+          VFLAGS: -cc clang -nocache
         run: v -path "$PWD|@vlib|@vmodules" run tools/build install -Demit-xcframework=false -Demit-macos-app=true --prefix "$RUNNER_TEMP/witty"
       - name: Verify app binary
         # Universal, and not tied to the CI runner's V install (libgc.dylib).
