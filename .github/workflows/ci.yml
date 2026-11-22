@@ -86,19 +86,7 @@ jobs:
       - name: Check
         run: v -check .
       - name: Build
-        run: |
-          (
-            while sleep 120; do
-              ps -eo pid,ppid,stat,etime,time,rss,wchan:32,comm --forest
-              build_pid=$(pgrep -n -x build || true)
-              if [[ -n "$build_pid" ]] && command -v gdb >/dev/null; then
-                sudo timeout 10s gdb -nx -batch -ex 'thread apply all bt' -p "$build_pid" || true
-              fi
-            done
-          ) &
-          progress_pid=$!
-          trap 'kill "$progress_pid" 2>/dev/null || true' EXIT
-          v -gc none -path "$PWD|@vlib|@vmodules" run tools/build install --prefix "$RUNNER_TEMP/witty"
+        run: v -path "$PWD|@vlib|@vmodules" run tools/build install --prefix "$RUNNER_TEMP/witty"
       - uses: actions/upload-artifact@v7
         with:
           name: witty-linux

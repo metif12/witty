@@ -126,7 +126,7 @@ fn C.read(int, voidptr, uint) int
 
 struct ResourcePollFd {
 mut:
-	fd int
+	fd i32 // C pollfd stores the descriptor in a 32-bit int.
 	events i16
 	revents i16
 }
@@ -141,7 +141,7 @@ fn collect_output(mut process os.Process) !(string, string) {
 	} $else {
 		mut stdout := []u8{}
 		mut stderr := []u8{}
-		mut fds := [ResourcePollFd{fd: process.stdio_fd[1], events: i16(C.POLLIN)}, ResourcePollFd{fd: process.stdio_fd[2], events: i16(C.POLLIN)}]!
+		mut fds := [ResourcePollFd{fd: i32(process.stdio_fd[1]), events: i16(C.POLLIN)}, ResourcePollFd{fd: i32(process.stdio_fd[2]), events: i16(C.POLLIN)}]!
 		mut buffer := []u8{len: 4096}
 		for fds[0].fd >= 0 || fds[1].fd >= 0 {
 			if C.poll(&fds[0], 2, -1) < 0 {
