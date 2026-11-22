@@ -4,7 +4,8 @@
 #include <stdlib.h>
 #include <stdint.h>
 #if defined(__APPLE__)
-#include <malloc/malloc.h>
+/* V's generated C can suppress the SDK's typed malloc declarations. */
+extern size_t malloc_size(const void *ptr);
 #elif defined(__linux__) || defined(__FreeBSD__) || defined(_WIN32)
 #include <malloc.h>
 #endif
