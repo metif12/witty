@@ -1,0 +1,65 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - '[0-9]+.[0-9]+.[0-9]+*'
+      - 'v[0-9]+.[0-9]+.[0-9]+*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: ${{ !github.event.deleted }}
+    uses: ./.github/workflows/ci.yml
+    with:
+      release_tag: ${{ github.ref_name }}
+
+  publish:
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: release-assets
+          pattern: witty-*
+          merge-multiple: true
+      - name: Publish release
+        env:
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          assets=(
+            release-assets/witty-macos-universal.tar.gz
+            release-assets/witty-linux-x86_64.tar.gz
+            release-assets/witty-vt-windows-x86_64.zip
+          )
+          for asset in "${assets[@]}"; do
+            test -s "$asset"
+          done
+
+          if release=$(gh release view "$RELEASE_TAG" --json isDraft,assets 2>/dev/null); then
+            if jq -e '.isDraft' <<< "$release" >/dev/null; then
+              gh release upload "$RELEASE_TAG" --clobber "${assets[@]}"
+              gh release edit "$RELEASE_TAG" --draft=false
+            else
+              for asset in "${assets[@]}"; do
+                jq -e --arg name "${asset##*/}" '.assets | any(.name == $name)' <<< "$release" >/dev/null
+              done
+            fi
+            exit 0
+          fi
+
+          set -- --verify-tag --generate-notes --title "Witty $RELEASE_TAG"
+          if [[ "${RELEASE_TAG%%+*}" == *-* ]]; then
+            set -- "$@" --prerelease
+          fi
+          gh release create "$RELEASE_TAG" "${assets[@]}" "$@"

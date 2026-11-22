@@ -2,14 +2,21 @@ name: CI
 
 on:
   push:
+    branches: ['**']
   pull_request:
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      release_tag:
+        type: string
+        default: ''
 
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 env:
+  RELEASE_TAG: ${{ inputs.release_tag }}
   V_C_ERROR_BUG_REPORT_DISABLED: '1'
   V_MACOS_V3_NO_FALLBACK: '1'
   VFLAGS: -cc clang
@@ -35,7 +42,7 @@ jobs:
         # A cached build can omit declarations for specialized destructors.
         env:
           VFLAGS: -cc clang -nocache
-        run: v -path "$PWD|@vlib|@vmodules" run tools/build install -Demit-xcframework=false -Demit-macos-app=true --prefix "$RUNNER_TEMP/witty"
+        run: bash .github/scripts/ci-build.sh install -Demit-xcframework=false -Demit-macos-app=true
       - name: Verify app binary
         # Universal, and not tied to the CI runner's V install (libgc.dylib).
         run: |
@@ -48,11 +55,14 @@ jobs:
             printf '%s\n' "$libraries"
             exit 1
           fi
+      - name: Package release
+        if: inputs.release_tag != ''
+        run: tar -czf "$RUNNER_TEMP/witty-macos-universal.tar.gz" -C "$RUNNER_TEMP" witty
       - uses: actions/upload-artifact@v7
         with:
           name: witty-macos
-          path: ${{ runner.temp }}/witty
-          if-no-files-found: warn
+          path: ${{ inputs.release_tag != '' && format('{0}/witty-macos-universal.tar.gz', runner.temp) || format('{0}/witty', runner.temp) }}
+          if-no-files-found: ${{ inputs.release_tag != '' && 'error' || 'warn' }}
 
   linux:
     runs-on: ubuntu-24.04
@@ -91,12 +101,15 @@ jobs:
       - name: Check
         run: v -check .
       - name: Build
-        run: v -path "$PWD|@vlib|@vmodules" run tools/build install --prefix "$RUNNER_TEMP/witty"
+        run: bash .github/scripts/ci-build.sh install
+      - name: Package release
+        if: inputs.release_tag != ''
+        run: tar -czf "$RUNNER_TEMP/witty-linux-x86_64.tar.gz" -C "$RUNNER_TEMP" witty
       - uses: actions/upload-artifact@v7
         with:
           name: witty-linux
-          path: ${{ runner.temp }}/witty
-          if-no-files-found: warn
+          path: ${{ inputs.release_tag != '' && format('{0}/witty-linux-x86_64.tar.gz', runner.temp) || format('{0}/witty', runner.temp) }}
+          if-no-files-found: ${{ inputs.release_tag != '' && 'error' || 'warn' }}
 
   windows:
     runs-on: windows-2022
@@ -117,9 +130,13 @@ jobs:
       - name: Install V
         run: bash .github/scripts/install-v.sh
       - name: Build libghostty-vt
-        run: v -path "$PWD|@vlib|@vmodules" run tools/build lib-vt --prefix "$RUNNER_TEMP/witty"
+        run: bash .github/scripts/ci-build.sh lib-vt
+      - name: Package release
+        if: inputs.release_tag != ''
+        shell: pwsh
+        run: Compress-Archive -Path "$env:RUNNER_TEMP/witty" -DestinationPath "$env:RUNNER_TEMP/witty-vt-windows-x86_64.zip"
       - uses: actions/upload-artifact@v7
         with:
           name: witty-vt-windows
-          path: ${{ runner.temp }}/witty
-          if-no-files-found: warn
+          path: ${{ inputs.release_tag != '' && format('{0}/witty-vt-windows-x86_64.zip', runner.temp) || format('{0}/witty', runner.temp) }}
+          if-no-files-found: ${{ inputs.release_tag != '' && 'error' || 'warn' }}
