@@ -41,8 +41,13 @@ jobs:
         run: |
           exe="$RUNNER_TEMP/witty/Ghostty.app/Contents/MacOS/ghostty"
           lipo -info "$exe"
-          lipo "$exe" -verify_arch arm64 x86_64
-          if otool -L "$exe" | grep -q libgc; then otool -L "$exe"; exit 1; fi
+          lipo "$exe" -verify_arch arm64
+          lipo "$exe" -verify_arch x86_64
+          libraries=$(otool -arch all -L "$exe")
+          if [[ "$libraries" == *libgc* ]]; then
+            printf '%s\n' "$libraries"
+            exit 1
+          fi
       - uses: actions/upload-artifact@v7
         with:
           name: witty-macos
