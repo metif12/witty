@@ -707,42 +707,42 @@ pub fn get() !Entry {
 			name: name
 			home: h.value
 		}
-	}
+	} $else {
+		mut buf := []u8{len: 1024}
+		mut pw := C.passwd{}
+		mut pw_result := &C.passwd(unsafe { nil })
+		result := C.getpwuid_r(C.getuid(), &pw, unsafe { &char(buf.data) }, uint(buf.len), &pw_result)
+		if result != 0 {
+			log.warn('error retrieving pw entry code=${result}')
+			return Entry{}
+		}
+		if isnil(pw_result) {
+			log.warn("no pw entry to detect default shell, will default to 'sh'")
+			return Entry{}
+		}
 
-	mut buf := []u8{len: 1024}
-	mut pw := C.passwd{}
-	mut pw_result := &C.passwd(unsafe { nil })
-	result := C.getpwuid_r(C.getuid(), &pw, unsafe { &char(buf.data) }, uint(buf.len), &pw_result)
-	if result != 0 {
-		log.warn('error retrieving pw entry code=${result}')
-		return Entry{}
-	}
-	if isnil(pw_result) {
-		log.warn("no pw entry to detect default shell, will default to 'sh'")
-		return Entry{}
-	}
-
-	// A Flatpak passwd entry only has a reliable username. Query the host for
-	// the shell and home directory, matching Ghostty's host-command path.
-	$if linux {
-		if is_flatpak() {
-			if !buildcfg.flatpak {
-				log.warn("flatpak detected, but this build doesn't contain flatpak support")
-			} else {
-				log.info('flatpak detected, will use host command to get our entry')
-				name := if isnil(pw.pw_name) {
-					''
+		// A Flatpak passwd entry only has a reliable username. Query the host for
+		// the shell and home directory, matching Ghostty's host-command path.
+		$if linux {
+			if is_flatpak() {
+				if !buildcfg.flatpak {
+					log.warn("flatpak detected, but this build doesn't contain flatpak support")
 				} else {
-					unsafe { cstring_to_vstring(pw.pw_name) }
+					log.info('flatpak detected, will use host command to get our entry')
+					name := if isnil(pw.pw_name) {
+						''
+					} else {
+						unsafe { cstring_to_vstring(pw.pw_name) }
+					}
+					return get_passwd_flatpak(name)!
 				}
-				return get_passwd_flatpak(name)!
 			}
 		}
-	}
-	return Entry{
-		shell: if isnil(pw.pw_shell) { none } else { unsafe { cstring_to_vstring(pw.pw_shell) } }
-		home:  if isnil(pw.pw_dir) { none } else { unsafe { cstring_to_vstring(pw.pw_dir) } }
-		name:  if isnil(pw.pw_name) { none } else { unsafe { cstring_to_vstring(pw.pw_name) } }
+		return Entry{
+			shell: if isnil(pw.pw_shell) { none } else { unsafe { cstring_to_vstring(pw.pw_shell) } }
+			home:  if isnil(pw.pw_dir) { none } else { unsafe { cstring_to_vstring(pw.pw_dir) } }
+			name:  if isnil(pw.pw_name) { none } else { unsafe { cstring_to_vstring(pw.pw_name) } }
+		}
 	}
 }
 

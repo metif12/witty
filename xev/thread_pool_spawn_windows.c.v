@@ -1,13 +1,13 @@
 module xev
 
-#include <windows.h>
+#include "@VMODROOT/xev/thread_pool_windows.h"
 #flag windows -lntdll
 
 fn C.GetProcessHeap() voidptr
 fn C.HeapAlloc(heap voidptr, flags u32, size uint) voidptr
 fn C.HeapFree(heap voidptr, flags u32, ptr voidptr) bool
 fn C.CreateThread(attributes voidptr, stack_size uint, entry voidptr, arg voidptr, flags u32, id &u32) voidptr
-fn C.RtlWaitOnAddress(address voidptr, expected voidptr, size uint, timeout voidptr) int
+fn C.RtlWaitOnAddress(address voidptr, expected voidptr, size uint, timeout voidptr) i32
 fn C.RtlWakeAddressSingle(address voidptr)
 fn C.RtlWakeAddressAll(address voidptr)
 
