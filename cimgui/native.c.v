@@ -12,8 +12,20 @@ $if !managed_native ? {
 		#flag -L/opt/homebrew/lib
 		#flag -lfreetype
 	} $else $if linux {
-		#flag @VMODROOT/cimgui/lib/libdcimgui_linux.a
 		#pkgconfig freetype2
+		#flag -DIMGUI_ENABLE_FREETYPE=1
+		#flag -I@VMODROOT/cimgui/vendor/imgui/backends
+		#flag @VMODROOT/cimgui/vendor/imgui/imgui.o
+		#flag @VMODROOT/cimgui/vendor/imgui/imgui_draw.o
+		#flag @VMODROOT/cimgui/vendor/imgui/imgui_tables.o
+		#flag @VMODROOT/cimgui/vendor/imgui/imgui_widgets.o
+		#flag @VMODROOT/cimgui/vendor/imgui/imgui_demo.o
+		#flag @VMODROOT/cimgui/vendor/imgui/misc/freetype/imgui_freetype.o
+		#flag @VMODROOT/cimgui/vendor/dear_bindings/dcimgui.o
+		#flag @VMODROOT/cimgui/vendor/dear_bindings/dcimgui_internal.o
+		#flag @VMODROOT/cimgui/ext.o
+		#flag @VMODROOT/cimgui/vendor/imgui/backends/imgui_impl_opengl3.o
+		#flag @VMODROOT/cimgui/opengl_bridge.o
 	} $else {
 		$compile_error('this target requires the native archive graph (-d managed_native)')
 	}

@@ -15,8 +15,11 @@ These sources are the exact dependencies selected by Ghostty commit
 the Metal renderer backend on macOS and the OpenGL 3 renderer backend on
 Linux. The V bindings expose the native inspector API on both platforms and
 the renderer-backend lifecycle as `metal_*` or `opengl_*` methods. The script
-writes a native static archive under `lib/`; rerun it when building on a
-different architecture.
+writes an architecture-specific static archive under `lib/`.
+
+On Linux, V compiles the vendored sources for host generators and direct
+module builds. Install a C++ compiler and the FreeType development package
+that provides `freetype2.pc`.
 
 The checked-in macOS arm64 archive has SHA-256
 `8e4a438f605ff75802029a31a7071773f75be528340d61ca8617f2682521cf8e`.
@@ -27,5 +30,5 @@ locked files and also compiles the original macOS platform backend. The two
 hash `N-V-__8AAEbOfQBnvcFcCX2W5z7tDaN8vaNZGamEQtNOe0UI` before copying.
 It writes `.witty-build/native/libdcimgui.a`, propagates target/SDK/optimization
 arguments, selects the source macOS/iOS/OpenGL branches, and retains original
-Windows export and FreeBSD/musl PIC flags. The existing script remains a host
-bootstrap for direct module tests.
+Windows export and FreeBSD/musl PIC flags. On macOS, `build.sh` can rebuild
+the archive used by direct module tests for the host architecture.

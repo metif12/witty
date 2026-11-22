@@ -141,9 +141,8 @@
 #define HWY_TARGET_STR_AVX2 \
   HWY_TARGET_STR_SSE4 ",avx,avx2" HWY_TARGET_STR_BMI2_FMA HWY_TARGET_STR_F16C
 
-// Clang 22 removed the evex512 feature (512-bit vectors are implied by
-// AVX-512F again) and rejects the whole target attribute if it is present.
-#if HWY_COMPILER_GCC_ACTUAL >= 1400 || \
+// GCC 16 and Clang 22 removed evex512. AVX-512F implies 512-bit vectors.
+#if (HWY_COMPILER_GCC_ACTUAL >= 1400 && HWY_COMPILER_GCC_ACTUAL < 1600) || \
     (HWY_COMPILER_CLANG >= 1800 && HWY_COMPILER_CLANG < 2200)
 #define HWY_TARGET_STR_AVX3_VL512 ",evex512"
 #else
@@ -186,12 +185,11 @@
 #define HWY_TARGET_STR_AVX3_SPR \
   HWY_TARGET_STR_AVX3_SPR_256 HWY_TARGET_STR_AVX3_VL512
 
-#if HWY_COMPILER_CLANG >= 2200
-// Clang 22 dropped evex512 and the 256/512-bit AVX10 variants; avx10.2 always
-// includes 512-bit vectors.
+#if HWY_COMPILER_GCC_ACTUAL >= 1500 || HWY_COMPILER_CLANG >= 2200
+// These compilers use avx10.2 without a vector-width suffix.
 #define HWY_TARGET_STR_AVX10_2 HWY_TARGET_STR_AVX3_SPR ",avx10.2"
 #define HWY_TARGET_STR_AVX10_2_512 HWY_TARGET_STR_AVX3_SPR ",avx10.2"
-#elif HWY_COMPILER_GCC_ACTUAL >= 1500 || HWY_COMPILER_CLANG >= 2000
+#elif HWY_COMPILER_CLANG >= 2000
 #define HWY_TARGET_STR_AVX10_2 \
   HWY_TARGET_STR_AVX3_SPR_256 ",no-evex512,avx10.2-256"
 #define HWY_TARGET_STR_AVX10_2_512 \
