@@ -9,6 +9,7 @@ import sync.stdatomic as _
 #include <winsock2.h>
 #include <mswsock.h>
 #include <windows.h>
+#include "@VMODROOT/xev/iocp_clock_windows.h"
 #flag windows -lws2_32
 #flag windows -lmswsock
 
@@ -48,8 +49,8 @@ mut:
 fn C.CreateIoCompletionPort(fd voidptr, existing voidptr, key uint, concurrency u32) voidptr
 fn C.GetQueuedCompletionStatusEx(port voidptr, entries &C.OVERLAPPED_ENTRY, count u32, removed &u32, timeout u32, alertable int) bool
 fn C.PostQueuedCompletionStatus(port voidptr, bytes u32, key uint, overlapped &C.OVERLAPPED) bool
-fn C.QueryPerformanceFrequency(frequency &i64) int
-fn C.QueryPerformanceCounter(counter &i64) int
+fn C.witty_iocp_query_performance_frequency(frequency &i64) int
+fn C.witty_iocp_query_performance_counter(counter &i64) int
 fn C.GetLastError() u32
 fn C.CloseHandle(handle voidptr) bool
 fn C.ReadFile(handle voidptr, buffer voidptr, size u32, count &u32, overlapped voidptr) bool
@@ -544,7 +545,7 @@ pub mut:
 pub fn IocpLoop.init(options Options) !IocpLoop {
 	_ = options
 	mut frequency := i64(0)
-	if C.QueryPerformanceFrequency(&frequency) == 0 {
+	if C.witty_iocp_query_performance_frequency(&frequency) == 0 {
 		panic('unreachable QueryPerformanceFrequency')
 	}
 	qpc_duration := u64(1_000_000_000) / u64(frequency)
@@ -717,7 +718,7 @@ pub fn (self &IocpLoop) now() i64 {
 
 pub fn (mut self IocpLoop) update_now() {
 	mut counter := i64(0)
-	if C.QueryPerformanceCounter(&counter) == 0 { panic('unreachable QueryPerformanceCounter') }
+	if C.witty_iocp_query_performance_counter(&counter) == 0 { panic('unreachable QueryPerformanceCounter') }
 	self.cached_now = u64(counter) * self.qpc_duration
 }
 
