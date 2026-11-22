@@ -13,6 +13,14 @@ import terminal
 import xev
 
 $if renderer_metal ?|| ( ( macos || ios ) && !renderer_opengl ?) {
+	$if gcboehm ? {
+		#include "@VMODROOT/renderer/metal_gc_thread.h"
+
+		fn C.witty_metal_register_gc_thread() bool
+
+		fn C.witty_metal_unregister_gc_thread()
+	}
+
 	fn Renderer.init_metal(opts RendererOpts) !Renderer {
 		// Create the font shaper
 		mut font_shaper := fontshaper.NativeShaper.init_backend(opts.font_grid.backend(), font.ShaperOptions{
@@ -365,20 +373,11 @@ $if renderer_metal ?|| ( ( macos || ios ) && !renderer_opengl ?) {
 		frame_submitted = true
 	}
 
-	struct MetalCompletionStackBase {
-	mut:
-		mem_base voidptr
-	}
-
 	// Metal invokes asynchronous completion blocks on a framework-owned thread.
 	// Register that stack while the callback touches V/GC-managed renderer state.
 	fn metal_completion_register_thread() bool {
 		$if gcboehm ? {
-			mut stack_base := MetalCompletionStackBase{}
-			if C.GC_get_stack_base(voidptr(&stack_base)) != 0 {
-				return false
-			}
-			return C.GC_register_my_thread(voidptr(&stack_base)) == 0
+			return C.witty_metal_register_gc_thread()
 		} $else {
 			return false
 		}
@@ -387,7 +386,7 @@ $if renderer_metal ?|| ( ( macos || ios ) && !renderer_opengl ?) {
 	fn metal_completion_unregister_thread(registered bool) {
 		$if gcboehm ? {
 			if registered {
-				C.GC_unregister_my_thread()
+				C.witty_metal_unregister_gc_thread()
 			}
 		} $else {
 			_ = registered

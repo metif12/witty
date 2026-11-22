@@ -279,9 +279,10 @@ pub:
 	select Select
 }
 
-// Message is a message posted to the search thread's mailbox: the source's
-// tagged union.
-pub type Message = MessageChangeNeedle | MessageSelect
+// SearchThreadMessage is the tagged union posted to the search thread's mailbox.
+pub type SearchThreadMessage = MessageChangeNeedle | MessageSelect
+
+pub type Message = SearchThreadMessage
 
 // Events that can be emitted from the search thread. The caller
 // chooses to handle these as they see fit.
@@ -381,12 +382,12 @@ mut:
 }
 
 // The type used for sending messages to the thread.
-pub type Mailbox = datastruct.BlockingQueue[Message]
+pub type Mailbox = datastruct.BlockingQueue[SearchThreadMessage]
 
 // create allocates the mailbox with its fixed source capacity. V generics have
 // no integer parameters, so the capacity is supplied here instead of the type.
 pub fn Mailbox.create() !&Mailbox {
-	return datastruct.BlockingQueue.create[Message](64)!
+	return datastruct.BlockingQueue.create[SearchThreadMessage](64)!
 }
 
 // Initialize the thread. This does not START the thread. This only sets

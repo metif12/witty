@@ -469,6 +469,10 @@ pub mut:
 	ptr &C.hb_buffer_t = unsafe { nil }
 }
 
+pub fn (b Buffer) str() string {
+	return 'Buffer{ptr: ${voidptr(b.ptr)}}'
+}
+
 // create allocates a new HarfBuzz buffer.
 pub fn Buffer.create() !Buffer {
 	p := C.hb_buffer_create()
@@ -672,6 +676,10 @@ pub fn (b Blob) get_user_data(key voidptr) voidptr {
 pub struct Font {
 pub mut:
 	ptr &C.hb_font_t = unsafe { nil }
+}
+
+pub fn (f Font) str() string {
+	return 'Font{ptr: ${voidptr(f.ptr)}}'
 }
 
 // create creates a HarfBuzz font from a face.

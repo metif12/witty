@@ -764,12 +764,6 @@ import wuffs.jpeg as wuffs_jpeg
 import wuffs.png as wuffs_png
 import xev
 
-fn C.GC_get_stack_base(stack_base voidptr) int
-
-fn C.GC_register_my_thread(stack_base voidptr) int
-
-fn C.GC_unregister_my_thread() int
-
 // Create a renderer type with the provided graphics API wrapper.
 //
 // The graphics API wrapper must provide the interface outlined below.

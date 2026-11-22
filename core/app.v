@@ -815,12 +815,14 @@ fn (self &App) has_surface(surface &Surface) bool {
 }
 
 // The message types that can be sent to the app thread.
-pub type Message = OpenConfigMsg
+pub type AppMailboxMessage = OpenConfigMsg
 	| NewWindowMsg
 	| CloseMsg
 	| QuitMsg
 	| SurfaceMessageMsg
 	| RedrawSurfaceMsg
+
+pub type Message = AppMailboxMessage
 
 // Open the configuration file
 pub struct OpenConfigMsg {}
@@ -868,12 +870,12 @@ pub mut:
 const app_mailbox_capacity = 64
 
 // The type used for sending messages to the app thread.
-pub type MailboxQueue = datastruct.BlockingQueue[Message]
+pub type MailboxQueue = datastruct.BlockingQueue[AppMailboxMessage]
 
 // create allocates the queue with its fixed source capacity. V generics have
 // no integer parameters, so the capacity is supplied here instead of the type.
 pub fn MailboxQueue.create() !&MailboxQueue {
-	return datastruct.BlockingQueue.create[Message](app_mailbox_capacity)!
+	return datastruct.BlockingQueue.create[AppMailboxMessage](app_mailbox_capacity)!
 }
 
 // Send a message to the surface.

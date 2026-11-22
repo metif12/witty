@@ -25,6 +25,12 @@ checkout_revision v "$v_revision" "$v_root"
 checkout_revision vc "$vc_revision" "$v_root/vc"
 checkout_revision tccbin "$tcc_revision" "$v_root/thirdparty/tcc"
 
+if [[ "$RUNNER_OS" != Windows ]]; then
+  # V emits some callback typedefs after their structs and can drop optional enum typedefs.
+  script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+  git -C "$v_root" apply "$script_dir/../patches/v-c-declarations.patch"
+fi
+
 unset VEXE
 if [[ "$RUNNER_OS" == Windows ]]; then
   (cd "$v_root" && cmd.exe //d //c 'makev.bat -gcc --local')

@@ -32,8 +32,6 @@ jobs:
       - name: Build
         # Universal (arm64 + x86_64) app, as released. The standalone XCFramework
         # is skipped: its iOS slices need a V whose iOS C output compiles.
-        env:
-          VFLAGS: -cc clang -no-parallel
         run: v -path "$PWD|@vlib|@vmodules" run tools/build install -Demit-xcframework=false -Demit-macos-app=true --prefix "$RUNNER_TEMP/witty"
       - name: Verify app binary
         # Universal, and not tied to the CI runner's V install (libgc.dylib).
@@ -89,11 +87,15 @@ jobs:
           (
             while sleep 120; do
               ps -eo pid,ppid,stat,etime,time,rss,wchan:32,comm --forest
+              build_pid=$(pgrep -n -x build || true)
+              if [[ -n "$build_pid" ]] && command -v gdb >/dev/null; then
+                sudo timeout 10s gdb -nx -batch -ex 'thread apply all bt' -p "$build_pid" || true
+              fi
             done
           ) &
           progress_pid=$!
           trap 'kill "$progress_pid" 2>/dev/null || true' EXIT
-          v -path "$PWD|@vlib|@vmodules" run tools/build install --prefix "$RUNNER_TEMP/witty"
+          v -gc none -path "$PWD|@vlib|@vmodules" run tools/build install --prefix "$RUNNER_TEMP/witty"
       - uses: actions/upload-artifact@v7
         with:
           name: witty-linux

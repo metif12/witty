@@ -190,8 +190,11 @@ pub fn (c &Config) changed(new &Config, key string) bool {
 	if key == 'command-palette-entry' {
 		return !c.command_palette_entry.equal(new.command_palette_entry)
 	}
+	if key == 'keybind' {
+		return !c.keybind.equal(new.keybind)
+	}
 	$for field in Config.fields {
-		$if !field.is_map && field.name != 'command_palette_entry' {
+		$if !field.is_map && field.name != 'command_palette_entry' && field.name != 'keybind' {
 			if field.name !in ['diagnostics', 'conditional_state', 'link', 'replay_steps',
 				'xdg_terminal_exec'] && field.name.replace('_', '-') == key {
 				return !comparison.deep_equal(c.$(field.name), new.$(field.name))

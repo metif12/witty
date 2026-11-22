@@ -1,0 +1,39 @@
+diff --git a/vlib/v/gen/c/struct.v b/vlib/v/gen/c/struct.v
+index 80070417..853ffb73 100644
+--- a/vlib/v/gen/c/struct.v
++++ b/vlib/v/gen/c/struct.v
+@@ -7833,6 +7833,16 @@ fn (mut g FlatGen) emit_struct(name string) {
+ 			g.tc.cur_module = old_module
+ 			return
+ 		}
++		// Emit the same callback typedef that write_struct_field will use in this module.
++		for field in fields {
++			field_type := cgen_unalias_type(field.typ)
++			if field_type is types.FnType {
++				encoded := g.struct_field_c_abi_fn_ptr_type(name_id, field.name) or {
++					g.sum_slot_aware_field_type(field_type) or { g.tc.c_type(field_type) }
++				}
++				g.ensure_fn_ptr_typedef_by_name(g.resolve_fn_ptr_type(encoded))
++			}
++		}
+ 		mut align := StructDeclAlignment{}
+ 		mut has_align := false
+ 		if decl_align := g.struct_decl_alignment_for_name(name_id) {
+diff --git a/vlib/v/gen/c/types.v b/vlib/v/gen/c/types.v
+index 8dcf7f56..5c207592 100644
+--- a/vlib/v/gen/c/types.v
++++ b/vlib/v/gen/c/types.v
+@@ -1808,10 +1808,12 @@ fn (mut g FlatGen) emit_optional_typedef(opt_name string, val_type string) bool
+ 	is_known_interface := bare_val_type in interface_matches
+ 	is_known_sum_type := g.is_known_sum_c_type(bare_val_type)
+ 	is_known_builtin := types.is_builtin_type_name(bare_val_type)
++	qualified_id := flat.source_type_id(bare_val_type.replace('__', '.'))
++	is_known_enum := qualified_id in g.tc.enum_names || qualified_id in g.tc.flag_enums
+ 	// Multi-return names can contain a module-qualified field component, but the
+ 	// payload is the generated tuple struct rather than a stale source struct.
+ 	if bare_val_type != 'Array' && !is_known_builtin && !is_known_interface && !is_known_sum_type
+-		&& !bare_val_type.starts_with('multi_return_')
++		&& !is_known_enum && !bare_val_type.starts_with('multi_return_')
+ 		&& (g.stale_ambiguous_qualified_struct_c_type(bare_val_type)
+ 			|| g.stale_missing_qualified_struct_c_type(bare_val_type)) {
+ 		// Stale generic annotations can lose the declaration module or inherit the
