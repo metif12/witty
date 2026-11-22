@@ -204,15 +204,12 @@ pub fn (d Driver) build_executable(deps NativeDeps) !string {
 		return error('Detected building on and for NixOS outside of the Nix shell environment. Run nix develop -c v run tools/build.')
 	}
 	mut args := d.v_arguments(.exe, deps)!
-	if d.cfg.target.darwin() {
-		// Non-prod macOS builds link V's prebuilt host libgc.dylib, which has
-		// only the host architecture (and ties the app to V's install path).
-		// Link the per-target GC built from V's own gc.c, and drop the dylib
-		// dependency once nothing uses it.
-		// Pass the archive to the linker itself (V's clang command uses `-x`,
-		// which would compile it as source), and via -cflags so it precedes
-		// V's -lgc: the linker binds to the first definition, and the dylib
-		// is then unused and dead-stripped.
+	if d.cfg.target.os == 'macos' {
+		// Build the bundled collector from source. Breakpad owns the Mach
+		// exception handler, which the collector only needs in incremental mode.
+		args << ['-d', 'use_bundled_libgc', '-cflags', '-DNO_MPROTECT_VDB=1', '-ldflags',
+			'-Wl,-dead_strip_dylibs']
+	} else if d.cfg.target.darwin() {
 		args << ['-cflags', compiler_argument('-Wl,' + d.runtime_archive()!), '-ldflags',
 			'-Wl,-dead_strip_dylibs']
 	}
