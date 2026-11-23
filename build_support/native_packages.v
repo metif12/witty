@@ -37,10 +37,11 @@ pub fn (d Driver) native_package(name string) !string {
 	path := d.cache_path('deps', name)
 	if !os.exists(os.join_path(path, '.source-checksum')) {
 		os.mkdir_all(path)!
-		// tar runs from the repo root; relative paths keep GNU tar (Git for
-		// Windows) from reading a `D:` drive prefix as a remote host.
-		checked_process(d.cfg.root, ['tar', 'xf', repo_relative(d.cfg.root, archive),
-			'--strip-components=1', '-C', repo_relative(d.cfg.root, path)])!
+		// tar runs from the repo root; relative forward-slashed paths keep
+		// GNU tar (Git for Windows) from reading a `D:` drive prefix as a
+		// remote host, and MSYS tar does not accept `\` separators.
+		checked_process(d.cfg.root, ['tar', 'xf', tar_relative(d.cfg.root, archive),
+			'--strip-components=1', '-C', tar_relative(d.cfg.root, path)])!
 		os.write_file(os.join_path(path, '.source-checksum'), spec.sha256)!
 	}
 	return path
@@ -314,4 +315,10 @@ pub fn (d Driver) build_fontconfig(options NativeCompileOptions) !string {
 fn repo_relative(root string, path string) string {
 	prefix := root.trim_right('/\\') + os.path_separator
 	return if path.starts_with(prefix) { path[prefix.len..] } else { path }
+}
+
+// tar arguments on every platform: repo-relative (see above) and always
+// forward-slashed, since MSYS tar rejects `\` separators.
+fn tar_relative(root string, path string) string {
+	return repo_relative(root, path).replace('\\', '/')
 }
