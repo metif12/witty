@@ -55,7 +55,9 @@ pub fn build(repo_root string, options Options) ![]string {
 			// relying on transitive includes that current standard
 			// libraries no longer provide. Upstream headers stay
 			// untouched, so force the include from the build interface.
-			flags << '-include cstdint'
+			// (Two argv elements: process args are passed verbatim,
+			// never re-split.)
+			flags << ['-include', 'cstdint']
 		}
 		if library == 'spirv_cross' { flags << ['-DSPIRV_CROSS_C_API_GLSL=1',
 				'-DSPIRV_CROSS_C_API_MSL=1'] }
